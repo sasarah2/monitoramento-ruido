@@ -8,8 +8,8 @@ app = Flask(__name__)
 CORS(app)
 
 # Configurações de Nuvem
-URL = "SUA_URL_DO_SUPABASE"
-KEY = "SUA_CHAVE_ANON_DO_SUPABASE"
+URL = "https://wcfldifyyntiqvtvkfdk.supabase.co/rest/v1/"
+KEY = "sb_publishable_E9Kd_3eIElgKbsRUpkQbHw_IMZUlpYr"
 supabase: Client = create_client(URL, KEY)
 
 @app.route("/api/ruido", methods=["POST"])
