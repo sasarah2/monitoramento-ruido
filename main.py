@@ -30,43 +30,46 @@ def ultimas_leituras():
 
 @app.route("/")
 def pagina():
-    # Página técnica simples para ver se os dados estão chegando
     return render_template_string("""
     <!DOCTYPE html>
     <html lang="pt-br">
     <head>
         <meta charset="UTF-8">
-        <title>Logs de Monitoramento</title>
+        <title>Ponte de Dados - Monitoramento</title>
         <style>
-            body { font-family: monospace; background: #222; color: #0f0; padding: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #444; }
-            th, td { padding: 10px; border: 1px solid #444; text-align: left; }
-            th { background: #333; }
-            h1 { color: #fff; }
+            body { font-family: monospace; background: #1a1a1a; color: #00ff00; padding: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #333; }
+            th, td { padding: 12px; border: 1px solid #333; text-align: left; }
+            th { background: #252525; color: #fff; }
+            h1 { color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; }
         </style>
     </head>
     <body>
-        <h1>Ponte de Dados: Microfone -> Banco</h1>
-        <p>Status: Servidor Operacional (Aguardando entrada...)</p>
+        <h1>LOGS TÉCNICOS: MICROFONE -> BANCO</h1>
+        <p>Status: Conexão Ativa | Aguardando Pacotes...</p>
         <table>
             <thead>
                 <tr>
-                    <th>Data/Hora</th>
-                    <th>Valor Capturado (dB)</th>
+                    <th>Data/Hora (UTC)</th>
+                    <th>ID / Operador</th>
+                    <th>Nível (dB)</th>
                 </tr>
             </thead>
             <tbody id="tabela"></tbody>
         </table>
         <script>
             async function atualizar() {
-                const res = await fetch('/api/ultimas');
-                const dados = await res.json();
-                document.getElementById('tabela').innerHTML = dados.map(d => `
-                    <tr>
-                        <td>${d.created_at}</td>
-                        <td>${d.decibeis} dB</td>
-                    </tr>
-                `).join('');
+                try {
+                    const res = await fetch('/api/ultimas');
+                    const dados = await res.json();
+                    document.getElementById('tabela').innerHTML = dados.map(d => `
+                        <tr>
+                            <td>${new Date(d.created_at).toLocaleString('pt-BR')}</td>
+                            <td>${d.id_dispositivo || 'Não Identificado'}</td>
+                            <td>${d.decibeis} dB</td>
+                        </tr>
+                    `).join('');
+                } catch (e) { console.error("Erro na ponte:", e); }
             }
             setInterval(atualizar, 3000);
             atualizar();
@@ -74,7 +77,3 @@ def pagina():
     </body>
     </html>
     """)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
