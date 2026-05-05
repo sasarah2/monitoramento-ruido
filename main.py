@@ -1,60 +1,74 @@
 
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
-from supabase import create_client, Client
-import os
-from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, render_template_string      # Bibliotecas para: receber(ler) dados de chegam, formato de dados, exibir pagina web
+from flask_cors import CORS                                            # Permite receber dados externos(Esp32 + Aplicativo)
+from supabase import create_client, Client                             # Importa biblioteca propria da Supabase (Banco de dados) - Ferramneta de conexão
+from datetime import datetime, timedelta                               # Biblioteca Data e hora + calculos
 
 app = Flask(__name__)
 CORS(app)
 
 # Configurações de Nuvem
-URL = "https://wcfldifyyntiqvtvkfdk.supabase.co/rest/v1/"
-KEY = "sb_publishable_E9Kd_3eIElgKbsRUpkQbHw_IMZUlpYr"
-supabase: Client = create_client(URL, KEY)
+URL = "https://wcfldifyyntiqvtvkfdk.supabase.co/rest/v1/"            #[ Chaves
+KEY = "sb_publishable_E9Kd_3eIElgKbsRUpkQbHw_IMZUlpYr"               #[
+supabase: Client = create_client(URL, KEY)                           #Conexão com o banco
+
+#Receber Ruído
 
 @app.route("/api/ruido", methods=["POST"])
 def receber_ruido():
-    dados = request.get_json()
+    dados = request.get_json()                                       # Json -> Python
     id_dispositivo = dados.get("id_dispositivo")
     
-    # 1. Busca no Supabase quem está com esse microfone agora (alocação ativa)
-    alocacao = supabase.table("alocacoes").select("id_funcionario").eq("id_dispositivo", id_dispositivo).eq("ativa", True).execute()
+    # 1. Busca qual NOME está ativo para este microfone
+    alocacao = supabase.table("alocacoes").select("nome_funcionario").eq("id_dispositivo", id_dispositivo).eq("ativa", True).execute()
     
-    # Se encontrar alguém, pega o ID; se não, fica vazio (None)
-    id_func = alocacao.data[0]['id_funcionario'] if alocacao.data else None
+    # 2. VERIFICAÇÃO: Só continua se houver alguém logado
+    if alocacao.data:
+        nome_atual = alocacao.data[0]['nome_funcionario']
+        
+        # 3. Salva a leitura apenas se o funcionário existir
+        supabase.table("leituras").insert({
+            "id_dispositivo": id_dispositivo,
+            "nome_funcionario": nome_atual, 
+            "decibeis": dados.get("decibeis")
+        }).execute()
+        
+        return jsonify({"status": "recebido e salvo"})
+    else:
+        # Se não tiver ninguém, retornamos uma mensagem diferente e NÃO salvamos nada
+        return jsonify({"status": "ignorado", "motivo": "nenhum operador ativo"}), 200
 
-    # 2. Salva a leitura já vinculada ao funcionário correto
-    supabase.table("leituras").insert({
-        "id_dispositivo": id_dispositivo,
-        "id_funcionario": id_func, 
-        "decibeis": dados.get("decibeis")
-    }).execute()
-    
-    return jsonify({"status": "recebido"})
-
+#Aplicativo Dados    
 
 @app.route("/api/alocacao", methods=["POST"])
 def alocar_funcionario():
-    dados = request.get_json()
-    # Desativa alocações anteriores para esse dispositivo
-    supabase.table("alocacoes").update({"ativa": False}).eq("id_dispositivo", dados.get("id_dispositivo")).execute()
+    dados = request.get_json()                                         # Json -> Python
+    # Pega o nome escrito no aplicativo
+    nome_escrito = dados.get("nome_funcionario") 
+    id_dispositivo = dados.get("id_dispositivo")
+
+    # 1. Desativa quem estava usando esse microfone antes
+    supabase.table("alocacoes").update({"ativa": False}).eq("id_dispositivo", id_dispositivo).execute()
     
-    # Cria a nova alocação ativa
+    # 2. Salva a nova alocação usando o NOME diretamente
     supabase.table("alocacoes").insert({
-        "id_funcionario": dados.get("id_funcionario"),
-        "id_dispositivo": dados.get("id_dispositivo"),
+        "nome_funcionario": nome_escrito,
+        "id_dispositivo": id_dispositivo,
         "id_maquina": dados.get("id_maquina"),
         "ativa": True
     }).execute()
-    return jsonify({"status": "Alocação realizada!"})
     
+    return jsonify({"status": f"O operador {nome_escrito} está ativo!"})
+    
+# Últimas Leituras Render   
 
 @app.route("/api/ultimas", methods=["GET"])
 def ultimas_leituras():
     # Apenas busca os dados para conferência
     res = supabase.table("leituras").select("*").order("id", desc=True).limit(40).execute()
     return jsonify(res.data)
+    
+#Site Render
 
 @app.route("/")
 def pagina():
@@ -80,7 +94,7 @@ def pagina():
                 <tr>
                     <th>Data/Hora (Brasília)</th>
                     <th>Dispositivo</th>
-                    <th>ID Funcionário</th>
+                   <th>Operador Ativo</th>
                     <th>Nível (dB)</th>
                 </tr>
             </thead>
@@ -95,7 +109,7 @@ def pagina():
                         <tr>
                             <td>${new Date(d.created_at).toLocaleString('pt-BR')}</td>
                             <td>${d.id_dispositivo || '---'}</td>
-                            <td>${d.id_funcionario || 'Sem Operador'}</td>
+                            <td>${d.nome_funcionario || 'Sem Nome'}</td>
                             <td>${d.decibeis} dB</td>
                         </tr>
                     `).join('')
