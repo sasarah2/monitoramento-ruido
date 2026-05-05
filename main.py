@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from supabase import create_client, Client
 import os
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
@@ -15,12 +16,39 @@ supabase: Client = create_client(URL, KEY)
 @app.route("/api/ruido", methods=["POST"])
 def receber_ruido():
     dados = request.get_json()
-    # Pega o dado do microfone e joga no banco
+    id_dispositivo = dados.get("id_dispositivo")
+    
+    # 1. Busca no Supabase quem está com esse microfone agora (alocação ativa)
+    alocacao = supabase.table("alocacoes").select("id_funcionario").eq("id_dispositivo", id_dispositivo).eq("ativa", True).execute()
+    
+    # Se encontrar alguém, pega o ID; se não, fica vazio (None)
+    id_func = alocacao.data[0]['id_funcionario'] if alocacao.data else None
+
+    # 2. Salva a leitura já vinculada ao funcionário correto
     supabase.table("leituras").insert({
-        "id_dispositivo": dados.get("operador", "Sensor_01"), 
+        "id_dispositivo": id_dispositivo,
+        "id_funcionario": id_func, 
         "decibeis": dados.get("decibeis")
     }).execute()
+    
     return jsonify({"status": "recebido"})
+
+
+@app.route("/api/alocacao", methods=["POST"])
+def alocar_funcionario():
+    dados = request.get_json()
+    # Desativa alocações anteriores para esse dispositivo
+    supabase.table("alocacoes").update({"ativa": False}).eq("id_dispositivo", dados.get("id_dispositivo")).execute()
+    
+    # Cria a nova alocação ativa
+    supabase.table("alocacoes").insert({
+        "id_funcionario": dados.get("id_funcionario"),
+        "id_dispositivo": dados.get("id_dispositivo"),
+        "id_maquina": dados.get("id_maquina"),
+        "ativa": True
+    }).execute()
+    return jsonify({"status": "Alocação realizada!"})
+    
 
 @app.route("/api/ultimas", methods=["GET"])
 def ultimas_leituras():
@@ -50,8 +78,9 @@ def pagina():
         <table>
             <thead>
                 <tr>
-                    <th>Data/Hora (UTC)</th>
-                    <th>ID / Operador</th>
+                    <th>Data/Hora (Brasília)</th>
+                    <th>Dispositivo</th>
+                    <th>ID Funcionário</th>
                     <th>Nível (dB)</th>
                 </tr>
             </thead>
@@ -65,10 +94,11 @@ def pagina():
                     document.getElementById('tabela').innerHTML = dados.map(d => `
                         <tr>
                             <td>${new Date(d.created_at).toLocaleString('pt-BR')}</td>
-                            <td>${d.id_dispositivo || 'Não Identificado'}</td>
+                            <td>${d.id_dispositivo || '---'}</td>
+                            <td>${d.id_funcionario || 'Sem Operador'}</td>
                             <td>${d.decibeis} dB</td>
                         </tr>
-                    `).join('');
+                    `).join('')
                 } catch (e) { console.error("Erro na ponte:", e); }
             }
             setInterval(atualizar, 3000);
