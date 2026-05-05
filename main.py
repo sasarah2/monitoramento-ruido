@@ -53,7 +53,7 @@ def alocar_funcionario():
 @app.route("/api/ultimas", methods=["GET"])
 def ultimas_leituras():
     # Apenas busca os dados para conferência
-    res = supabase.table("leituras").select("*").order("id", desc=True).limit(20).execute()
+    res = supabase.table("leituras").select("*").order("id", desc=True).limit(40).execute()
     return jsonify(res.data)
 
 @app.route("/")
