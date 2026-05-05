@@ -73,8 +73,8 @@ def pagina():
         </style>
     </head>
     <body>
-        <h1>LOGS TÉCNICOS: MICROFONE -> BANCO</h1>
-        <p>Status: Conexão Ativa | Aguardando Pacotes...</p>
+        <h1>DADOS TÉCNICOS: MICROFONE + APLICATIVO -> BANCO</h1>
+        <p>Status: Conexão Ativa | Aguardando dados...</p>
         <table>
             <thead>
                 <tr>
