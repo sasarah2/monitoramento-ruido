@@ -2,13 +2,16 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from supabase import create_client, Client
 from datetime import datetime
+from flask import send_file
+from io import BytesIO
+from openpyxl import Workbook
 
 app = Flask(__name__)
 CORS(app)
 
-# Configurações Supabase
-URL = "https://wcfldifyyntiqvtvkfdk.supabase.co"
-KEY = "sb_publishable_E9Kd_3eIElgKbsRUpkQbHw_IMZUlpYr"
+# Configurações Supabase - NOVO BANCO
+URL = "https://opeuwiidtblhpfzwsgwx.supabase.co"
+KEY = "sb_publishable_xyS7amI8Qr5jlaZOLDtlJg_z7kSiuWc"
 
 supabase: Client = create_client(URL, KEY)
 
@@ -25,7 +28,6 @@ def receber_ruido():
     if not dados:
         return jsonify({"status": "erro", "mensagem": "JSON vazio ou inválido"}), 400
 
-    # O ESP32 pode mandar "operador" ou "id_dispositivo"
     id_dispositivo = dados.get("id_dispositivo") or dados.get("operador")
     decibeis = dados.get("decibeis")
 
@@ -39,10 +41,9 @@ def receber_ruido():
     try:
         decibeis = float(decibeis)
 
-        # Busca funcionário ativo para esse dispositivo
         alocacao = supabase.table("alocacoes") \
             .select("nome_funcionario") \
-            .eq("id_dispositivo", id_dispositivo) \
+            .eq("id_dispositivo", str(id_dispositivo)) \
             .eq("ativa", True) \
             .execute()
 
@@ -52,7 +53,7 @@ def receber_ruido():
             nome_atual = f"Operador {id_dispositivo}"
 
         leitura = {
-            "id_dispositivo": id_dispositivo,
+            "id_dispositivo": str(id_dispositivo),
             "nome_funcionario": nome_atual,
             "decibeis": decibeis,
             "data_hora": datetime.now().isoformat()
@@ -76,6 +77,12 @@ def receber_ruido():
 def alocar_funcionario():
     dados = request.get_json()
 
+    if not dados:
+        return jsonify({
+            "status": "erro",
+            "mensagem": "JSON vazio ou inválido"
+        }), 400
+
     nome_escrito = dados.get("nome_funcionario")
     id_dispositivo = dados.get("id_dispositivo")
 
@@ -85,21 +92,28 @@ def alocar_funcionario():
             "mensagem": "nome_funcionario e id_dispositivo são obrigatórios"
         }), 400
 
-    supabase.table("alocacoes") \
-        .update({"ativa": False}) \
-        .eq("id_dispositivo", id_dispositivo) \
-        .execute()
+    try:
+        supabase.table("alocacoes") \
+            .update({"ativa": False}) \
+            .eq("id_dispositivo", str(id_dispositivo)) \
+            .execute()
 
-    supabase.table("alocacoes").insert({
-        "nome_funcionario": nome_escrito,
-        "id_dispositivo": id_dispositivo,
-        "id_maquina": dados.get("id_maquina"),
-        "ativa": True
-    }).execute()
+        supabase.table("alocacoes").insert({
+            "nome_funcionario": nome_escrito,
+            "id_dispositivo": str(id_dispositivo),
+            "id_maquina": dados.get("id_maquina"),
+            "ativa": True
+        }).execute()
 
-    return jsonify({
-        "status": f"O operador {nome_escrito} está ativo!"
-    }), 200
+        return jsonify({
+            "status": f"O operador {nome_escrito} está ativo!"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "erro",
+            "mensagem": str(e)
+        }), 500
 
 
 @app.route("/api/ultimas", methods=["GET"])
@@ -119,6 +133,62 @@ def ultimas_leituras():
             "mensagem": str(e)
         }), 500
 
+@app.route("/relatorio_excel", methods=["GET"])
+def relatorio_excel():
+    try:
+        res = supabase.table("leituras") \
+            .select("*") \
+            .order("id", desc=False) \
+            .execute()
+
+        dados = res.data or []
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Relatório de Ruído"
+
+        ws.append([
+            "ID",
+            "Data/Hora",
+            "Dispositivo",
+            "Operador",
+            "Decibéis"
+        ])
+
+        if dados:
+            for d in dados:
+                ws.append([
+                    d.get("id", ""),
+                    d.get("created_at") or d.get("data_hora") or "",
+                    d.get("id_dispositivo", ""),
+                    d.get("nome_funcionario", ""),
+                    d.get("decibeis", "")
+                ])
+        else:
+            ws.append([
+                "",
+                "Sem dados registrados",
+                "",
+                "",
+                ""
+            ])
+
+        arquivo = BytesIO()
+        wb.save(arquivo)
+        arquivo.seek(0)
+
+        return send_file(
+            arquivo,
+            as_attachment=True,
+            download_name="relatorio_ruido.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        return jsonify({
+            "status": "erro",
+            "mensagem": str(e)
+        }), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

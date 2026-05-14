@@ -1,48 +1,122 @@
 <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <title>Ponte de Dados - Monitoramento</title>
-        <style>
-            body { font-family: monospace; background: #1a1a1a; color: #00ff00; padding: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #333; }
-            th, td { padding: 12px; border: 1px solid #333; text-align: left; }
-            th { background: #252525; color: #fff; }
-            h1 { color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        </style>
-    </head>
-    <body>
-        <h1>DADOS TÉCNICOS: MICROFONE + APLICATIVO -> BANCO</h1>
-        <p>Status: Conexão Ativa | Aguardando dados...</p>
-        <table>
-            <thead>
-                <tr>
-                    <th>Data/Hora (Brasília)</th>
-                    <th>Dispositivo</th>
-                   <th>Operador Ativo</th>
-                    <th>Nível (dB)</th>
-                </tr>
-            </thead>
-            <tbody id="tabela"></tbody>
-        </table>
-        <script>
-            async function atualizar() {
-                try {
-                    const res = await fetch('/api/ultimas');
-                    const dados = await res.json();
-                    document.getElementById('tabela').innerHTML = dados.map(d => `
-                        <tr>
-                            <td>${new Date(d.created_at).toLocaleString('pt-BR')}</td>
-                            <td>${d.id_dispositivo || '---'}</td>
-                            <td>${d.nome_funcionario || 'Sem Nome'}</td>
-                            <td>${d.decibeis} dB</td>
-                        </tr>
-                    `).join('')
-                } catch (e) { console.error("Erro na ponte:", e); }
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Ponte de Dados - Monitoramento</title>
+
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #ffffff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        p {
+            color: #cccccc;
+        }
+
+        .botoes {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #00ff00;
+            color: #111111;
+            border: none;
+            padding: 12px 18px;
+            margin-right: 10px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+            border-radius: 4px;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #00cc00;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            border: 1px solid #333;
+            background: #111;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #333;
+            text-align: left;
+        }
+
+        th {
+            background: #252525;
+            color: #ffffff;
+        }
+
+        tr:nth-child(even) {
+            background: #151515;
+        }
+
+        tr:hover {
+            background: #222;
+        }
+    </style>
+</head>
+<body>
+    <h1>DADOS TÉCNICOS: MICROFONE + APLICATIVO → BANCO</h1>
+
+    <p>Status: Conexão Ativa | Aguardando dados...</p>
+
+    <!-- Botão para gerar relatório -->
+    <div class="botoes">
+        <a href="/relatorio_excel">
+            <button>📊 Gerar Relatório Excel</button>
+        </a>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Data/Hora (Brasília)</th>
+                <th>Dispositivo</th>
+                <th>Operador Ativo</th>
+                <th>Nível (dB)</th>
+            </tr>
+        </thead>
+        <tbody id="tabela"></tbody>
+    </table>
+
+    <script>
+        async function atualizar() {
+            try {
+                const res = await fetch('/api/ultimas');
+                const dados = await res.json();
+
+                document.getElementById('tabela').innerHTML = dados.map(d => `
+                    <tr>
+                        <td>${new Date(d.created_at).toLocaleString('pt-BR')}</td>
+                        <td>${d.id_dispositivo || '---'}</td>
+                        <td>${d.nome_funcionario || 'Sem Nome'}</td>
+                        <td>${d.decibeis} dB</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error("Erro na ponte:", e);
             }
-            setInterval(atualizar, 3000);
-            atualizar();
-        </script>
-    </body>
-    </html>
-    """
+        }
+
+        setInterval(atualizar, 3000);
+        atualizar();
+    </script>
+</body>
+</html>
